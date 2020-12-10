@@ -186,6 +186,10 @@ class Frame
         {
             free(pixels);
         }
+        if(updatePositions)
+        {
+            free(updatePositions);
+        }
     }
 
 };
@@ -294,6 +298,7 @@ class VideoCompressor
                 next.setX(xa);
                 next.setY(ya);
                 next.setData(rectData, w, h);
+                free(rectData);
             }
             else
             {
@@ -307,6 +312,7 @@ class VideoCompressor
                     updateData[u+2] = data[differences[i].y*width*3+differences[i].x*3+2];
                     u += 3;
                 }
+                free(updateData);
             }
             frames.push_back(next);
             current.updateByFrame(next);
