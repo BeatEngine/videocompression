@@ -2,6 +2,11 @@
 #include <stdlib.h>
 #include <string.h>
 
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb_image.h"
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#include "stb_image_write.h"
+
 enum class FrameType : char {
      FULL = 'F',
      RECT = 'R',
@@ -151,12 +156,12 @@ class Frame
                 for(int y = next.getY(); y < next.getHeight(); y++)
                 {
                     rx = 0;
-                    for(x = next.getX(); x < next.getWidth(); x++)
+                    for(x = next.getX()*3; x < next.getWidth()*3; x+=3)
                     {
-                        pixels[y*w*3+x*3] = source[ry*next.getWidth()*3+rx*3];
-                        pixels[y*w*3+x*3+1] = source[ry*next.getWidth()*3+rx*3+1];
-                        pixels[y*w*3+x*3+2] = source[ry*next.getWidth()*3+rx*3+2];
-                        rx++;
+                        pixels[y*w*3+x] = source[ry*next.getWidth()*3+rx];
+                        pixels[y*w*3+x+1] = source[ry*next.getWidth()*3+rx+1];
+                        pixels[y*w*3+x+2] = source[ry*next.getWidth()*3+rx+2];
+                        rx+=3;
                     }
                     ry++; 
                 }
@@ -169,7 +174,6 @@ class Frame
             if(source && pos)
             {
                 int size = next.getWidth()*next.getHeight();
-
                 for(int i = 0; i < size; i++)
                 {
                     pixels[pos[i]] = source[i];
@@ -207,6 +211,7 @@ class VideoCompressor
     int height = 1080;
     std::vector<Frame> frames;
     Frame current;
+    int currentIndex = 0;
 
     public:
 
@@ -216,12 +221,19 @@ class VideoCompressor
         this->width = width;
     }
 
-    void loadNextFrame(unsigned char* data)
+    void loadNextFrame(unsigned char* data, bool debugExport = false)
     {
         if(frames.size() == 0)
         {
             frames.push_back(Frame(data, width, height));
             current = Frame(data, width, height);
+            currentIndex = 0;
+            if(debugExport)
+            {
+                char tmp[20] = "";
+                sprintf(tmp, "%d", currentIndex);
+                stbi_write_png((std::string("info/")+"dbg_"+tmp+".png").c_str(), current.getWidth(), current.getHeight(), 3, (void*)current.rawData(), current.getWidth() * 3);
+            }
         }
         else
         {
@@ -280,6 +292,13 @@ class VideoCompressor
                     next.setType(FrameType::FULL);
                     frames.push_back(Frame(data, width, height));
                     current = Frame(data, width, height);
+                    currentIndex++;
+                    if(debugExport)
+                    {
+                        char tmp[20] = "";
+                        sprintf(tmp, "%d", currentIndex);
+                        stbi_write_png((std::string("info/")+"dbg_"+tmp+".png").c_str(), current.getWidth(), current.getHeight(), 3, (void*)current.rawData(), current.getWidth() * 3);
+                    }
                     return;
                 }
 
@@ -294,10 +313,13 @@ class VideoCompressor
                         rectData[y*h*3+x*3+2] = data[(ya+y)*width*3+(xa+x)*3+2];
                     }
                 }
-
+                
+                next.setData(rectData, w, h);
+                next.setW(w);
+                next.setH(h);
                 next.setX(xa);
                 next.setY(ya);
-                next.setData(rectData, w, h);
+                next.setType(FrameType::RECT);
                 free(rectData);
             }
             else
@@ -312,16 +334,62 @@ class VideoCompressor
                     updateData[u+2] = data[differences[i].y*width*3+differences[i].x*3+2];
                     u += 3;
                 }
+                next.setData(updateData, differences.size()*3, 1);
+                next.setType(FrameType::PIXELS);
                 free(updateData);
             }
             frames.push_back(next);
             current.updateByFrame(next);
+            currentIndex++;
+            if(debugExport)
+            {
+                char tmp[12] = "";
+                sprintf(tmp, "%d", currentIndex);
+                stbi_write_png((std::string("info/")+"dbg_"+tmp+".png").c_str(), next.getWidth(), next.getHeight(), 3, (void*)current.rawData(), current.getWidth() * 3);
+            }
         }
         
     }
 
+    void setVideoPosition(int frame = 0)
+    {
+        currentIndex = 0;
+        current = frames.at(0);
+        int i = 1;
+        while (i < frame && i < frames.size())
+        {
+            current.updateByFrame(frames[i]);
+            i++;
+            currentIndex++;
+        }
+        currentIndex = frame;
+    }
 
-
+    Frame& getNext(bool debuggerInfo = false)
+    {
+        if(currentIndex + 1 < frames.size())
+        {
+            if(debuggerInfo)
+            {
+                char tmp[12] = "";
+                sprintf(tmp, "%d", currentIndex);
+                stbi_write_png((std::string("info/")+"out_"+tmp+".png").c_str(), current.getWidth(), current.getHeight(), 3, (void*)current.rawData(), current.getWidth() * 3);
+            }
+            current.updateByFrame(frames[currentIndex+1]);
+            currentIndex++;
+        }
+        if(currentIndex == frames.size()-1)
+        {
+            if(debuggerInfo)
+            {
+                char tmp[12] = "";
+                sprintf(tmp, "%d", currentIndex);
+                stbi_write_png((std::string("info/")+"out_"+tmp+".png").c_str(), current.getWidth(), current.getHeight(), 3, (void*)current.rawData(), current.getWidth() * 3);
+            }
+        }
+        
+        return current;
+    }
 
 
 
